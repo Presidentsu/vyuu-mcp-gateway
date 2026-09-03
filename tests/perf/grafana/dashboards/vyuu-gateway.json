@@ -1,0 +1,170 @@
+{
+  "uid": "vyuu-gateway-perf",
+  "title": "Vyuu MCP Gateway — Perf",
+  "tags": ["vyuu", "perf"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Gateway alive",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [
+        { "expr": "vyuu_proc_alive", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "options": { "colorMode": "background" }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "RPS (5s)",
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(vyuu_requests_total[15s]))", "refId": "A", "legendFormat": "rps" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 1 } },
+      "options": { "colorMode": "value" }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Inflight",
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 0 },
+      "targets": [
+        { "expr": "sum(vyuu_inflight_requests)", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "decimals": 0 } }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "503 rate-limit / s",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 0 },
+      "targets": [
+        { "expr": "sum(rate(vyuu_rate_limit_503_total[15s]))", "refId": "A" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 100 }] }
+        }
+      },
+      "options": { "colorMode": "background" }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Stdio subprocesses",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 0 },
+      "targets": [
+        { "expr": "vyuu_stdio_subprocess_count", "refId": "A" }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "RPS by status code",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "sum by (status) (rate(vyuu_requests_total[15s]))", "refId": "A", "legendFormat": "{{status}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "custom": { "stacking": { "mode": "normal" }, "fillOpacity": 30 } } }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Latency p50 / p95 / p99",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(vyuu_request_duration_seconds_bucket[30s])))", "refId": "p50", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(vyuu_request_duration_seconds_bucket[30s])))", "refId": "p95", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(vyuu_request_duration_seconds_bucket[30s])))", "refId": "p99", "legendFormat": "p99" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "RPS by route (top 10)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "topk(10, sum by (route) (rate(vyuu_requests_total[15s])))", "refId": "A", "legendFormat": "{{route}}" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Inflight by route",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [
+        { "expr": "vyuu_inflight_requests", "refId": "A", "legendFormat": "{{route}}" }
+      ]
+    },
+
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "Gateway CPU %",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "vyuu_proc_cpu_percent", "refId": "A", "legendFormat": "cpu" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent", "max": 800 } }
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Gateway RSS (MiB)",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 20 },
+      "targets": [
+        { "expr": "vyuu_proc_rss_bytes / 1024 / 1024", "refId": "A", "legendFormat": "rss" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "decmbytes" } }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Gateway file descriptors",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 20 },
+      "targets": [
+        { "expr": "vyuu_proc_fds", "refId": "A", "legendFormat": "fds" }
+      ]
+    },
+
+    {
+      "id": 40,
+      "type": "timeseries",
+      "title": "Stdio subprocesses (count + RSS)",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 27 },
+      "targets": [
+        { "expr": "vyuu_stdio_subprocess_count", "refId": "A", "legendFormat": "count" },
+        { "expr": "vyuu_stdio_subprocess_rss_bytes / 1024 / 1024", "refId": "B", "legendFormat": "rss MiB" }
+      ]
+    },
+    {
+      "id": 41,
+      "type": "timeseries",
+      "title": "Postgres active connections",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 27 },
+      "targets": [
+        { "expr": "vyuu_postgres_active_connections", "refId": "A", "legendFormat": "active" }
+      ]
+    }
+  ]
+}

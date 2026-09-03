@@ -1,0 +1,175 @@
+################################################################################
+# Vyuu MCP Gateway — single-box appliance deployment (Standard tier sizing).
+#
+# What's here:
+# - Gateway pod with resource limits + restart policy + healthcheck.
+# - Postgres 16 (gateway config DB).
+# - Redis 7 (multi-instance session registry — only needed if running
+#   >1 gateway replica; included so vertical-scale-then-horizontal-split
+#   doesn't require swapping in a stateful service later).
+# - NATS JetStream (audit producer target).
+#
+# Tiering:
+#   Starter  (≤30 RPS):       reduce mem_limit on gateway to 1g.
+#   Standard (≤90 RPS):       defaults below.
+#   Production (≤200 RPS):    bump VYUU_INBOUND_LIMIT_CONCURRENCY=400,
+#                             VYUU_DB_POOL_SIZE=40, scale gateway to 4
+#                             replicas behind an external load balancer.
+#
+# Tier-1 stress-test fixes wired here:
+# - `restart: on-failure` (process supervisor)
+# - `mem_limit` + `pids_limit` (resource caps; OS kills cleanly on
+#   runaway subprocess fork)
+# - `healthcheck` targets `/healthz` (the route that's bypassed by
+#   the per-tenant inflight gate, so it stays green under burst)
+# - `VYUU_INBOUND_*` and `VYUU_DB_POOL_*` env vars exposed for tuning
+################################################################################
+
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: vyuu-gateway:latest
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      # Connection strings — point at the bundled stateful services.
+      VYUU_DATABASE_URL: postgresql+psycopg://vyuu:${POSTGRES_PASSWORD:-changeme}@postgres:5432/vyuu_gateway
+      VYUU_REDIS_URL: redis://redis:6379/0
+      # The audit emitter URL is consumed by the wiring layer that
+      # constructs `AsyncAuditEmitter(KafkaProducer | NATSProducer)`
+      # in production builds. Lab default is in-process emit; production
+      # deployments override `audit_emitter` in `create_app` or wire
+      # the NATS producer at startup.
+      VYUU_NATS_URL: nats://nats:4222
+      # Inbound back-pressure (Tier-1). Tune per tier.
+      VYUU_INBOUND_LIMIT_CONCURRENCY: "200"
+      VYUU_INBOUND_LIMIT_MAX_REQUESTS: "10000"
+      VYUU_INBOUND_BACKLOG: "128"
+      VYUU_INBOUND_KEEP_ALIVE_SECONDS: "5"
+      VYUU_INBOUND_PER_TENANT_INFLIGHT_LIMIT: "64"
+      # DB pool — sized to feed the inflight gate.
+      VYUU_DB_POOL_SIZE: "20"
+      VYUU_DB_POOL_MAX_OVERFLOW: "40"
+      VYUU_DB_POOL_TIMEOUT_SECONDS: "10"
+      VYUU_DB_POOL_RECYCLE_SECONDS: "1800"
+      # Audit storage cap (10 MiB). Transit unaffected; only opted-in
+      # raw-payload capture truncates above this size.
+      VYUU_AUDIT_RAW_CAPTURE_BYTE_CAP: "10485760"
+      # Auto-sync capabilities on registration.
+      VYUU_AUTO_SYNC_CAPABILITIES_ON_REGISTRATION: "true"
+      VYUU_AUTO_SYNC_PER_CALL_TIMEOUT_SECONDS: "30"
+      # SIEM-1 · deployment-level SIEM export (Splunk HEC). Optional —
+      # the gateway operator's SIEM; tenants configure their own in the
+      # console. Unset = off. The token is a deployment credential like
+      # VYUU_VAULT_TOKEN; put it in an env file, not here.
+      # VYUU_SIEM_HEC_URL: https://splunk.corp:8088
+      # VYUU_SIEM_HEC_TOKEN: ${SIEM_HEC_TOKEN}
+      # VYUU_SIEM_HEC_INDEX: vyuu
+      # VYUU_SIEM_CATEGORIES: '["tool_call","access_attempt","admin_action","auth","tool_auth","gateway_log"]'
+      # VYUU_SIEM_LOG_LEVEL: WARNING
+      # OTEL-1 · traces + metrics to the Splunk OTel Collector (OTLP/HTTP).
+      # Requires the [otel] extra in the image. Off by default.
+      # VYUU_OTEL_ENABLED: "true"
+      # VYUU_OTEL_EXPORTER_OTLP_ENDPOINT: http://splunk-otel-collector:4318
+      # VYUU_OTEL_TRACES_SAMPLE_RATIO: "1.0"
+      # Operational
+      VYUU_ENVIRONMENT: production
+      VYUU_LOG_LEVEL: INFO
+    deploy:
+      resources:
+        limits:
+          # 4 GB cap. OS kills cleanly with OOMKilled rather than
+          # letting a runaway subprocess fork escalate. Dial up for
+          # Production tier.
+          memory: 4g
+          # Cap subprocess fork rate. Stdio MCPs can spawn uvx/npx
+          # workers; without this a runaway upstream-pool client
+          # could fork-bomb the host. 200 covers ~30 stdio backing
+          # servers × ~6 pooled clients each.
+          pids: 200
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "2", "http://127.0.0.1:8000/healthz"]
+      interval: 15s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+    # Read-only root FS hardens against a compromised upstream
+    # writing to / inside the gateway image. /tmp is writable for
+    # uvx / npx / stdio working dirs.
+    read_only: true
+    tmpfs:
+      - /tmp:size=512m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  postgres:
+    image: postgres:16-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_USER: vyuu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: vyuu_gateway
+    volumes:
+      - vyuu-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vyuu -d vyuu_gateway"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+        reservations:
+          memory: 1g
+
+  redis:
+    image: redis:7-alpine
+    restart: on-failure
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "1gb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - vyuu-redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "PING"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  nats:
+    image: nats:2-alpine
+    restart: on-failure
+    command: ["-js", "-m", "8222"]
+    volumes:
+      - vyuu-natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--timeout=2", "-O", "-", "http://127.0.0.1:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+volumes:
+  vyuu-pgdata:
+  vyuu-redisdata:
+  vyuu-natsdata:

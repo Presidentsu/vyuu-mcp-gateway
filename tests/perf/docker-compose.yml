@@ -1,0 +1,67 @@
+# Vyuu MCP Gateway — local perf observability stack.
+#
+# Runs Prometheus + Grafana that scrape:
+#   - the gateway middleware on host:8000/metrics  (in-process metrics)
+#   - the exporter on host:9100/metrics            (system-side metrics)
+#
+# Both endpoints come from `lab_with_metrics.py` + `exporter.py` running
+# on the host, NOT in containers, so we can observe the host-spawned
+# stdio subprocesses directly.
+#
+# Bring up: `docker-compose up -d`
+# Bring down: `docker-compose down`
+# Wipe Prometheus state: `docker-compose down -v`
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: vyuu-perf-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=24h"  # plenty for a test run
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - vyuu-perf-prom-data:/prometheus
+
+  grafana:
+    image: grafana/grafana-oss:11.3.0
+    container_name: vyuu-perf-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - renderer
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+      # Point Grafana at the renderer sidecar so PNG render works
+      # via the API (`/render/d/...`). The sidecar is a separate
+      # service so we keep the grafana-oss image untouched.
+      GF_RENDERING_SERVER_URL: http://renderer:8081/render
+      GF_RENDERING_CALLBACK_URL: http://grafana:3000/
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - vyuu-perf-grafana-data:/var/lib/grafana
+
+  renderer:
+    image: grafana/grafana-image-renderer:3.11.6
+    container_name: vyuu-perf-renderer
+    restart: unless-stopped
+    environment:
+      ENABLE_METRICS: "true"
+    expose:
+      - "8081"
+
+volumes:
+  vyuu-perf-prom-data:
+  vyuu-perf-grafana-data:

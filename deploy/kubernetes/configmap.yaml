@@ -1,0 +1,69 @@
+# Vyuu MCP Gateway — non-secret configuration.
+#
+# Connection strings, signing secrets, OAuth credentials etc. live
+# in `secret.yaml`. Everything here is the operational tuning that
+# operators rotate per-environment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vyuu-gateway-config
+  namespace: vyuu
+data:
+  # ---- Inbound back-pressure (Tier-1 stress-test fix) ---------------------
+  VYUU_INBOUND_LIMIT_CONCURRENCY: "200"
+  VYUU_INBOUND_LIMIT_MAX_REQUESTS: "10000"
+  VYUU_INBOUND_BACKLOG: "128"
+  VYUU_INBOUND_KEEP_ALIVE_SECONDS: "5"
+  VYUU_INBOUND_PER_TENANT_INFLIGHT_LIMIT: "64"
+
+  # ---- DB connection pool (sized to feed the inflight gate) --------------
+  VYUU_DB_POOL_SIZE: "20"
+  VYUU_DB_POOL_MAX_OVERFLOW: "40"
+  VYUU_DB_POOL_TIMEOUT_SECONDS: "10"
+  VYUU_DB_POOL_RECYCLE_SECONDS: "1800"
+
+  # ---- Audit storage cap -------------------------------------------------
+  # 10 MiB. Transit always passes through; only opted-in raw payload
+  # capture in the audit event truncates to a sentinel above this.
+  VYUU_AUDIT_RAW_CAPTURE_BYTE_CAP: "10485760"
+
+  # ---- Auto-sync on registration ----------------------------------------
+  VYUU_AUTO_SYNC_CAPABILITIES_ON_REGISTRATION: "true"
+  VYUU_AUTO_SYNC_PER_CALL_TIMEOUT_SECONDS: "30"
+
+  # ---- Upstream pool / circuit breaker ----------------------------------
+  VYUU_UPSTREAM_MAX_CONNECTIONS_PER_SERVER: "4"
+  VYUU_UPSTREAM_READ_TIMEOUT_SECONDS: "30"
+  VYUU_UPSTREAM_HEALTH_TIMEOUT_SECONDS: "5"
+  VYUU_UPSTREAM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: "5"
+  VYUU_UPSTREAM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS: "30"
+
+  # ---- Periodic capability sync (long-tail backup to auto-sync) ---------
+  # Off by default. Enable in deployments that want background drift
+  # detection. Per-tenant concurrency cap protects upstreams.
+  VYUU_CAPABILITY_SYNC_ENABLED: "false"
+  VYUU_CAPABILITY_SYNC_INTERVAL_SECONDS: "3600"
+  VYUU_CAPABILITY_SYNC_MAX_CONCURRENT_PER_TENANT: "4"
+  VYUU_CAPABILITY_SYNC_PER_CALL_TIMEOUT_SECONDS: "30"
+
+  # ---- SIEM-1 · deployment-level SIEM export (Splunk HEC) ----------------
+  # Optional. The gateway operator's own SIEM; tenants configure theirs
+  # in the console. VYUU_SIEM_HEC_TOKEN belongs in secret.yaml.
+  # VYUU_SIEM_HEC_URL: "https://splunk.corp:8088"
+  # VYUU_SIEM_HEC_INDEX: "vyuu"
+  # VYUU_SIEM_CATEGORIES: '["tool_call","access_attempt","admin_action","auth","tool_auth"]'
+  # VYUU_SIEM_LOG_LEVEL: "WARNING"
+  # VYUU_SIEM_BATCH_MAX_EVENTS: "100"
+  # VYUU_SIEM_FLUSH_INTERVAL_SECONDS: "2"
+
+  # ---- OTEL-1 · OpenTelemetry → Splunk OTel Collector ---------------------
+  # Requires the [otel] extra in the image. Point at the collector's
+  # OTLP/HTTP receiver (4318). Traces: vyuu.mcp.request → vyuu.policy_eval
+  # → vyuu.upstream.call_tool. Metrics: vyuu.tool_calls, vyuu.tool_call.duration,
+  # vyuu.upstream.duration, vyuu.access_attempts, vyuu.auth.logins,
+  # vyuu.siem.events_sent / events_failed, vyuu.audit.emit_failures.
+  VYUU_OTEL_ENABLED: "false"
+  VYUU_OTEL_EXPORTER_OTLP_ENDPOINT: "http://splunk-otel-collector.observability.svc:4318"
+  VYUU_OTEL_SERVICE_NAME: "vyuu-mcp-gateway"
+  VYUU_OTEL_TRACES_SAMPLE_RATIO: "1.0"
+  VYUU_OTEL_METRIC_EXPORT_INTERVAL_SECONDS: "30"

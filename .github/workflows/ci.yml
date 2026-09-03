@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-unit:
+    name: ruff + pytest (no database)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: System deps (xmlsec1 for SAML)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xmlsec1 libxmlsec1-dev
+      - name: Install
+        run: pip install -e ".[dev,otel]"
+      - name: Lint
+        run: ruff check . --output-format=github
+      - name: Unit + light integration tests
+        run: pytest
+
+  database-integration:
+    name: pytest (PostgreSQL 16)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vyuu
+          POSTGRES_PASSWORD: vyuu
+          POSTGRES_DB: vyuu_gateway_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vyuu -d vyuu_gateway_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: System deps (xmlsec1 for SAML)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xmlsec1 libxmlsec1-dev
+      - name: Install
+        run: pip install -e ".[dev,otel]"
+      - name: Migrate
+        env:
+          VYUU_DATABASE_URL: postgresql+psycopg://vyuu:vyuu@127.0.0.1:5432/vyuu_gateway_test
+        run: alembic upgrade head
+      - name: Integration tests
+        env:
+          VYUU_TEST_DATABASE_URL: postgresql+psycopg://vyuu:vyuu@127.0.0.1:5432/vyuu_gateway_test
+        # The service container's role is a superuser, which bypasses RLS;
+        # the two tests that assert rows are *hidden* are deselected here
+        # and covered by tests/integration/test_rls_real_postgres.py, which
+        # creates its own non-bypass role.
+        run: >-
+          pytest
+          --deselect tests/audit/test_persistent_store.py::test_rls_blocks_cross_tenant_reads
+          --deselect tests/scim/test_scim_server.py::test_untenanted_directory_read_stays_blocked_without_the_capability

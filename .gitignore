@@ -1,0 +1,80 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual envs
+.venv/
+venv/
+env/
+ENV/
+
+# Test + coverage caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+*.whl
+
+# Local dev state
+*.log
+*.sqlite3
+*.db
+dump.rdb
+
+# IDE / editors
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local secrets / runtime config
+.env
+.env.local
+.env.*.local
+.claude/launch.json
+*.pem
+*.key
+*_secret
+*_secrets
+
+# Diagnostic bundles (downloaded)
+vyuu-diagnostic-*.json
+
+# Performance test artifacts
+tests/perf/results/*.svg
+tests/perf/results/*.json
+!tests/perf/results/.gitkeep
+
+# Alembic local state (versions are tracked; the cache isn't)
+migrations/__pycache__/
+
+# Local Claude Code state (permissions, launch config with lab OAuth creds)
+.claude/
+
+# Business / commercial material — not part of the codebase
+Vyuu Competitive & IP Analysis/
+Vyuu MCP Gateway/
+
+# Local scratch
+.scratch/
+*.rdb
+node_modules/
+
+# Internal security review — publish deliberately, not by default
+security-issues.md

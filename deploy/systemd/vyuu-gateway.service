@@ -1,0 +1,113 @@
+# Vyuu MCP Gateway — systemd unit for VM / bare-metal install.
+#
+# Install:
+#   sudo cp vyuu-gateway.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now vyuu-gateway
+#
+# Configure runtime tuning via /etc/vyuu/gateway.env (see below).
+# Reload after env changes: `sudo systemctl restart vyuu-gateway`.
+#
+# Tier-1 stress-test hardening expressed as systemd directives:
+# - `Restart=on-failure` + `RestartSec=5s` — supervisor restarts a
+#   crashed gateway without a restart loop hammering the host.
+# - `StartLimitBurst` + `StartLimitIntervalSec` — gives up if the
+#   gateway crashes 5 times in 60s (operator alarm condition; don't
+#   keep restarting into the same fault).
+# - `MemoryMax` + `TasksMax` — OS kills cleanly under runaway
+#   subprocess fork rather than letting it spiral.
+# - `ProtectSystem=strict`, `NoNewPrivileges`, `PrivateTmp`,
+#   `ProtectHome=true`, etc. — minimal blast radius if the gateway
+#   is compromised.
+
+[Unit]
+Description=Vyuu MCP Gateway
+Documentation=https://github.com/your-org/vyuu-gateway
+After=network.target postgresql.service redis.service
+Wants=network.target
+
+# Restart policy / backoff. After 5 crashes within 60s, give up
+# and require manual intervention (operator alarm).
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=vyuu
+Group=vyuu
+
+# Working dir + env file. Operators set DB connection string,
+# uvicorn back-pressure flags, and pool sizes here.
+WorkingDirectory=/opt/vyuu/gateway
+EnvironmentFile=/etc/vyuu/gateway.env
+
+# Use the venv-installed uvicorn. The flags here mirror the
+# Tier-1 stress-test fixes:
+#   --limit-concurrency: fast-503 past the cap (no silent queueing)
+#   --limit-max-requests: recycle workers periodically
+#   --backlog: kernel accept-queue cap
+#   --timeout-keep-alive: drop idle conns sooner
+#   --no-access-log: avoid disk-IO bottleneck under burst
+ExecStart=/opt/vyuu/gateway/.venv/bin/uvicorn \
+    vyuu_gateway.main:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers ${VYUU_WORKERS:-4} \
+    --limit-concurrency ${VYUU_INBOUND_LIMIT_CONCURRENCY:-200} \
+    --limit-max-requests ${VYUU_INBOUND_LIMIT_MAX_REQUESTS:-10000} \
+    --backlog ${VYUU_INBOUND_BACKLOG:-128} \
+    --timeout-keep-alive ${VYUU_INBOUND_KEEP_ALIVE_SECONDS:-5} \
+    --no-access-log
+
+# Graceful stop — give in-flight requests time to drain.
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Restart policy. `on-failure` covers crashes; `always` would also
+# restart on clean exits which we don't want (manual stop = stay
+# stopped).
+Restart=on-failure
+RestartSec=5s
+
+# Resource caps. Tune to physical resources of the host. These
+# defaults match the Standard appliance tier (16 vCPU / 96 GB box).
+MemoryMax=8G
+MemoryHigh=6G
+TasksMax=512
+
+# Security hardening. Gateway needs network + read pyproject and
+# code; everything else is locked down.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RemoveIPC=true
+
+# Restrict network access to families we actually use (IPv4 / IPv6
+# / Unix sockets — no AF_NETLINK / AF_PACKET / etc.).
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Read-write paths the gateway needs.
+ReadWritePaths=/var/log/vyuu /tmp
+
+# Prevent execve of binaries in writable locations.
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# Logging — journald captures stdout/stderr.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=vyuu-gateway
+
+[Install]
+WantedBy=multi-user.target

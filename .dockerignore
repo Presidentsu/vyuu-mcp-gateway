@@ -1,0 +1,19 @@
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+__pycache__
+*.pyc
+.DS_Store
+.claude
+Vyuu Competitive & IP Analysis
+Vyuu MCP Gateway
+tests
+docs
+*.log
+*.rdb
+.env
+HANDOFF.md
+BACKLOG.md
+security-issues.md

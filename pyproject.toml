@@ -1,0 +1,130 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vyuu-mcp-gateway"
+version = "0.1.0"
+description = "Server-side MCP enforcement, routing, audit, and observability gateway."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "alembic>=1.14.0",
+  "bcrypt>=4.0.0",
+  "boto3>=1.35.0",
+  "email-validator>=2.0.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "jsonschema>=4.20.0",
+  # v2 (2026-07-28) is a breaking rewrite — stateless protocol, Client API,
+  # snake_case types, httpx2. We are on the v1 line until MCP-2 (see
+  # BACKLOG.md) lands; the upper bound keeps fresh installs from silently
+  # resolving 2.x. v1.x remains maintained (critical + security fixes).
+  # MCP-2 P2 · the codebase now runs on BOTH SDK lines — `mcp/sdk_compat.py`
+  # absorbs the v1/v2 differences and the full suite passes on 1.27.0 and
+  # 2.1.1 alike (897 tests, both).
+  #
+  # Still pinned to <2 by default, deliberately. The proof is our test
+  # suite plus fake upstreams; interop against the real third-party MCP
+  # servers this gateway fronts (GitHub Copilot MCP, CrowdStrike Falcon,
+  # drawio) has only been exercised on v1. Flipping is a one-line change
+  # once someone runs the lab against v2:
+  #
+  #     "mcp>=2,<3",   and add   "httpx2",   which v2 transports require.
+  #
+  # v1.x remains maintained (critical + security fixes), so there is no
+  # deadline forcing the move.
+  "mcp>=1.13.0,<2",
+  "psycopg[binary]>=3.2.0",
+  "pyjwt[crypto]>=2.8.0",
+  "pydantic-settings>=2.6.0",
+  # SAML 2.0 sign-in for IDP-1 directories (admin chooses OIDC or SAML
+  # at directory-connect time). NOTE: pysaml2 shells out to the
+  # `xmlsec1` system binary for signature ops — production hosts need
+  # `apt-get install xmlsec1 libxml2-dev` (Debian) /
+  # `brew install libxmlsec1` (macOS) / `apk add libxmlsec1` (Alpine).
+  "pysaml2>=7.0",
+  "redis>=5.0.0",
+  "sqlalchemy>=2.0.36",
+  "uvicorn[standard]>=0.32.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Presidentsu/secure-mcp-gateway"
+Repository = "https://github.com/Presidentsu/secure-mcp-gateway"
+Documentation = "https://github.com/Presidentsu/secure-mcp-gateway/tree/main/docs"
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.13.0",
+  "pytest>=8.3.0",
+  "ruff>=0.7.0",
+  "types-jsonschema>=4.20.0",
+]
+# Optional broker producers for durable audit + graph emission. Operators
+# install only the one they actually deploy: `pip install
+# vyuu-mcp-gateway[kafka]` or `[nats]`. Lazy-imported in the producer
+# modules so the base install stays light.
+kafka = ["aiokafka>=0.12.0"]
+nats = ["nats-py>=2.7.0"]
+# OTEL-1 · traces + metrics to an OpenTelemetry collector (the Splunk
+# OTel Collector by default). Lazy-imported in `telemetry/otel.py`; with
+# `VYUU_OTEL_ENABLED=true` and this missing, the gateway starts and the
+# console's Telemetry panel says what to install.
+otel = [
+  "opentelemetry-api>=1.27.0",
+  "opentelemetry-sdk>=1.27.0",
+  "opentelemetry-exporter-otlp-proto-http>=1.27.0",
+]
+# Test/perf-only — for running `tests/perf/` load tests with a local
+# Prometheus + Grafana stack. Production deployments do NOT pull this
+# in; the gateway has no built-in /metrics endpoint, customers wire
+# their own observability against structured logs + audit events.
+perf = ["prometheus_client>=0.20.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vyuu_gateway"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+  "B",
+  "C4",
+  "E",
+  "F",
+  "I",
+  "N",
+  "UP",
+  "W",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+mypy_path = ["src"]
+files = ["src", "tests"]
+exclude = ["tests/perf/"]  # load-test tooling; not production code path
+warn_unused_configs = true
+
+# Optional broker libraries are not typed. The producer modules wrap
+# them through Protocols; callers see typed shapes.
+[[tool.mypy.overrides]]
+module = [
+  "aiokafka", "boto3", "botocore", "botocore.*", "nats", "nats.*",
+  "opentelemetry", "opentelemetry.*",
+]
+ignore_missing_imports = true
+
+# A3-α integration tests use SQLAlchemy DDL fixtures + dynamic factory
+# helpers that aren't worth fully annotating. Untyped-call noise here
+# adds no real signal.
