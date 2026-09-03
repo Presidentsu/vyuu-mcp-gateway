@@ -27,8 +27,8 @@ console reachable, and the lab MCP servers callable in ~15 minutes.
 
 ```bash
 cd ~/Desktop
-git clone https://github.com/<your-org>/secure-mcp-gateway.git
-cd secure-mcp-gateway
+git clone https://github.com/<your-org>/vyuu-mcp-gateway.git
+cd vyuu-mcp-gateway
 ```
 
 ## 2. Python venv + deps

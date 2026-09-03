@@ -1,4 +1,4 @@
-# Secure MCP Gateway
+# Vyuu MCP Gateway
 
 A multi-tenant security gateway for the Model Context Protocol. It sits
 between AI clients (Claude Desktop, Cursor, ChatGPT, your own agents) and
@@ -19,8 +19,8 @@ flowchart LR
     G -.-> S["Splunk HEC · OTel collector"]
 ```
 
-Built by Vyuu as the server-side half of AI Shield;
-the Python package is `vyuu_gateway`.
+Built by Vyuu as the server-side half of AI Shield; the Python package is
+`vyuu_gateway`. Licensed under [Apache-2.0](LICENSE).
 
 ## What it does
 
@@ -52,8 +52,8 @@ will use SAML, and — only for stdio MCP servers — Node 18+ (`npx`) and
 `uv` (`uvx`). Full matrix in [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#prerequisites).
 
 ```bash
-git clone https://github.com/Presidentsu/secure-mcp-gateway.git
-cd secure-mcp-gateway
+git clone https://github.com/Presidentsu/vyuu-mcp-gateway.git
+cd vyuu-mcp-gateway
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -111,7 +111,8 @@ mypy .
 CI runs lint, the unit suite, and the PostgreSQL 16 integration suite on
 every push and pull request.
 
-## Contributing and security
+## Contributing, security, license
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for conventions and
 [`SECURITY.md`](SECURITY.md) for how to report a vulnerability.
+Apache License 2.0 — see [`LICENSE`](LICENSE).
