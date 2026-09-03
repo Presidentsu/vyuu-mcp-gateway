@@ -28,6 +28,23 @@ the IdP issuers you connect (Entra ID, Google), the secret-store
 backend, the SIEM/collector endpoints, and — for the risk classifier —
 the chosen LLM vendor's API.
 
+## Scripted setup
+
+`deploy/setup/setup-linux.sh` and `deploy/setup/setup-macos.sh` take either
+shape below from a clean host to a signed-in operator: they check and offer
+to install Docker / kubectl / kind, generate every secret, run the Alembic
+migrations from the gateway image, seed the first admin, and verify
+`/healthz` plus an operator login. Re-runs reuse existing secrets;
+`deploy/setup/teardown.sh` removes what they deployed (`--purge` deletes
+the data as well). Options and behaviour:
+[`deploy/setup/README.md`](../deploy/setup/README.md).
+
+```bash
+./deploy/setup/setup-linux.sh --mode vm     # single host, Docker Compose
+./deploy/setup/setup-macos.sh --mode k8s    # Kubernetes (local or remote cluster)
+./deploy/setup/teardown.sh --mode vm        # shut it down again (data kept without --purge)
+```
+
 ## Shape 1 · Single-box appliance (Docker Compose)
 
 ```mermaid
@@ -86,7 +103,10 @@ flowchart TB
 
 Probes target `/healthz` (mounted at the app root and bypassed by the
 per-tenant in-flight gate) so a load burst never false-pages
-liveness. Manifests: `deploy/kubernetes/{deployment,configmap,secret.yaml.example}`.
+liveness. Manifests: `deploy/kubernetes/{deployment,configmap,secret.yaml.example}`,
+plus `migrate-job.yaml` (Alembic from the gateway image), `rbac-secret-store.yaml`
+(the `get`-only Role the Kubernetes secret store needs), `addons/{postgres,redis}.yaml`
+(evaluation-grade in-cluster services) and `ingress.yaml.example`.
 
 ## Shape 3 · Hybrid (gateway on-prem, secrets in AWS)
 

@@ -8,7 +8,8 @@ how the customer is deploying:
 |---|---|---|
 | **Docker Compose** | `docker/docker-compose.yml` | Single-box appliance, dev-stack, mid-market on-prem |
 | **systemd** | `systemd/vyuu-gateway.service` | VM / bare-metal install, no container runtime |
-| **Kubernetes** | `kubernetes/{deployment,configmap,secret}.yaml` | Production on K8s, OpenShift, or compatible PaaS |
+| **Kubernetes** | `kubernetes/{deployment,configmap,secret}.yaml` + `migrate-job.yaml`, `rbac-secret-store.yaml`, `addons/`, `ingress.yaml.example` | Production on K8s, OpenShift, or compatible PaaS |
+| **Scripted setup** | `setup/setup-linux.sh`, `setup/setup-macos.sh` | Either of the above, end to end, in one command |
 
 ## What each manifest enforces
 
@@ -105,11 +106,28 @@ of multiple gateway hosts).
 
 ## Quick-start
 
+### Scripted (recommended)
+
+One command per OS sets up either shape end to end — tool checks, secret
+generation, migrations, first-admin bootstrap, health and sign-in checks:
+
+```bash
+./deploy/setup/setup-linux.sh     # Linux: --mode vm | --mode k8s, --help for options
+./deploy/setup/setup-macos.sh     # macOS
+./deploy/setup/teardown.sh        # either OS: stop the stack (--purge deletes the data too)
+```
+
+Details in [`setup/README.md`](setup/README.md). The manual equivalents:
+
 ### Docker Compose
 ```bash
 cd deploy/docker
-POSTGRES_PASSWORD=$(openssl rand -hex 16) docker-compose up -d
-docker-compose logs -f gateway
+printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 16)" > .env
+cp ../../.env.example gateway.env        # set signing secrets, VYUU_BOOTSTRAP_*, VYUU_DEFAULT_TENANT_ID
+docker compose up -d --wait postgres redis nats
+docker compose run --rm --no-deps gateway alembic upgrade head
+docker compose up -d --wait gateway
+docker compose logs -f gateway
 # Operator console: http://localhost:8000/operator
 ```
 
@@ -133,6 +151,8 @@ kubectl apply -f deploy/kubernetes/configmap.yaml
 cp deploy/kubernetes/secret.yaml.example deploy/kubernetes/secret.yaml
 # edit secret.yaml to set DB URLs + signing secrets
 kubectl apply -f deploy/kubernetes/secret.yaml
+# optional evaluation-grade Postgres / Redis: deploy/kubernetes/addons/*.yaml
+# migrations run from the gateway image: deploy/kubernetes/migrate-job.yaml
 kubectl apply -f deploy/kubernetes/deployment.yaml
 kubectl -n vyuu rollout status deploy/vyuu-gateway
 kubectl -n vyuu port-forward svc/vyuu-gateway 8000:80

@@ -69,8 +69,12 @@ the token the lab printed. The end-user portal is at
 <http://127.0.0.1:8000/portal>. Step-by-step:
 [`docs/onboarding/SETUP.md`](docs/onboarding/SETUP.md).
 
-Production: [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
-(single VM · Kubernetes · hybrid with AWS secrets) and the manifests in
+Production: one command per OS sets up a single VM (Docker Compose) or a
+Kubernetes namespace end to end — `./deploy/setup/setup-linux.sh` or
+`./deploy/setup/setup-macos.sh`; `./deploy/setup/teardown.sh` shuts it down again
+([`deploy/setup/README.md`](deploy/setup/README.md)).
+The long-form guide is [`docs/GETTING-STARTED.md`](docs/GETTING-STARTED.md)
+(single VM · Kubernetes · hybrid with AWS secrets); manifests live in
 [`deploy/`](deploy/README.md).
 
 ## Documentation

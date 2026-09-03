@@ -38,9 +38,12 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src ./src
 
-# Install into a vendor prefix so the runtime stage can copy a
-# self-contained tree without pulling pip's metadata.
-RUN pip install --prefix=/install .
+# Install into a virtualenv so the runtime stage can copy one self-contained
+# tree whose interpreter already knows where its site-packages live (a bare
+# `--prefix` install is invisible to Python unless PYTHONPATH names the exact
+# `lib/python3.X/site-packages` directory).
+RUN python -m venv /opt/venv \
+ && /opt/venv/bin/pip install .
 
 
 # --- Runtime stage -----------------------------------------------------------
@@ -49,7 +52,7 @@ FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app/src \
-    PATH="/install/bin:${PATH}"
+    PATH="/opt/venv/bin:${PATH}"
 
 # Non-root runtime user. UID 10001 is conventional for K8s
 # `runAsNonRoot` SecurityContext checks.
@@ -66,9 +69,15 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Copy the prebuilt site-packages tree from the builder stage.
-COPY --from=builder /install /install
+# Copy the prebuilt virtualenv from the builder stage (same base image, so
+# its interpreter symlink resolves identically here).
+COPY --from=builder /opt/venv /opt/venv
 COPY --chown=vyuu:vyuu src ./src
+# Schema migrations ship in the image so `alembic upgrade head` runs from
+# the same artifact that serves traffic (compose: `docker compose run --rm
+# gateway alembic upgrade head`; Kubernetes: deploy/kubernetes/migrate-job.yaml).
+COPY --chown=vyuu:vyuu alembic.ini ./alembic.ini
+COPY --chown=vyuu:vyuu migrations ./migrations
 
 USER vyuu
 

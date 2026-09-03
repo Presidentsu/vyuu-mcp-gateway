@@ -1,0 +1,80 @@
+# In-cluster Redis 7 for the multi-instance session registry. Sessions are
+# re-established by clients, so this runs on an emptyDir (no PVC): a restart
+# costs a reconnect, not data. Rendered by deploy/setup.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vyuu-redis
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: vyuu-redis
+spec:
+  selector:
+    app.kubernetes.io/name: vyuu-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vyuu-redis
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: vyuu-redis
+    app.kubernetes.io/part-of: vyuu-gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vyuu-redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vyuu-redis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          args: ["redis-server", "--appendonly", "no", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 640Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 1Gi

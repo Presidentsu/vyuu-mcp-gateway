@@ -6,6 +6,24 @@ on:
   pull_request:
 
 jobs:
+  shell:
+    name: shellcheck (deploy/setup)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends shellcheck
+      - name: Syntax + lint
+        run: |
+          bash -n deploy/setup/setup-linux.sh deploy/setup/setup-macos.sh deploy/setup/teardown.sh deploy/setup/lib/common.sh
+          shellcheck -x -s bash -S style deploy/setup/setup-linux.sh deploy/setup/setup-macos.sh deploy/setup/teardown.sh deploy/setup/lib/common.sh
+      - name: Dry-run plans (no Docker, no cluster)
+        run: |
+          ./deploy/setup/setup-linux.sh --mode vm -y --dry-run --admin-email ci@example.com
+          ./deploy/setup/setup-linux.sh --mode k8s -y --dry-run --admin-email ci@example.com \
+            --image-strategy pull --image ghcr.io/example/vyuu-gateway:ci
+          ./deploy/setup/teardown.sh --mode vm -y --dry-run
+
   lint-and-unit:
     name: ruff + pytest (no database)
     runs-on: ubuntu-latest

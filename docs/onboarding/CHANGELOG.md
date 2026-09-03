@@ -10,6 +10,29 @@ For pending work + decision log, see [`BACKLOG.md`](../../BACKLOG.md).
 
 ---
 
+## 2026-09-03 — One-command setup scripts (single VM + Kubernetes)
+
+- `deploy/setup/setup-linux.sh` and `deploy/setup/setup-macos.sh` (shared
+  `lib/common.sh`, bash 3.2 compatible): interactive or `--yes`, `--dry-run`,
+  `--teardown [--purge]`; `teardown.sh` is the OS-detecting front door for the
+  latter. Single-VM mode drives `deploy/docker/docker-compose.yml`;
+  Kubernetes mode renders and applies `deploy/kubernetes/*` (local kind /
+  Docker Desktop / minikube / k3d / Colima / OrbStack, or any remote context).
+  Both generate secrets, run migrations, seed the first admin and verify
+  `/healthz` plus an operator sign-in.
+- Image now ships `alembic.ini` + `migrations/`, so migrations run from the
+  same artifact (`docker compose run --rm gateway alembic upgrade head`,
+  `deploy/kubernetes/migrate-job.yaml`).
+- New manifests: `migrate-job.yaml`, `rbac-secret-store.yaml` (get-only Role
+  for `VYUU_SECRET_STORE_BACKEND=kubernetes`), `addons/postgres.yaml`,
+  `addons/redis.yaml` (evaluation grade), `ingress.yaml.example`.
+- Compose: project name `vyuu-gateway`, `VYUU_IMAGE` / `VYUU_GATEWAY_PORT`
+  interpolation, optional `gateway.env` env_file, `VYUU_INBOUND_IDENTITY_PROVIDER=api_key`
+  set explicitly (production identity, never the lab header provider).
+- Bootstrap: optional `VYUU_BOOTSTRAP_TENANT_ID` pins the seeded tenant's id so
+  `VYUU_DEFAULT_TENANT_ID` can be set before first boot; an invalid value logs
+  `bootstrap_tenant_id_invalid` and skips the seed. Tests in `tests/test_bootstrap.py`.
+
 ## 2026-09-02 — SIEM export (Splunk HEC) + OpenTelemetry + UI production polish
 
 **Schema:** `20260902_0027` — `tenant_siem_targets` (FORCE RLS): one

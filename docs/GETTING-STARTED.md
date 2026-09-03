@@ -23,6 +23,13 @@ Pick the shape that matches your goal, follow the corresponding
 section, then return to the **common operations** section at the
 end for credential rotation / monitoring / etc.
 
+> **Shortcut.** `deploy/setup/setup-linux.sh` / `setup-macos.sh` automate
+> shapes 1 and 2 (Docker Compose on one host, or a Kubernetes namespace):
+> prerequisites, secrets, migrations, first-admin bootstrap and a sign-in
+> check. See [`deploy/setup/README.md`](../deploy/setup/README.md). The
+> sections below remain the reference for what those scripts do and for
+> the pieces they leave to you (TLS, HA Postgres, Vault).
+
 ---
 
 ## 0. Prerequisites

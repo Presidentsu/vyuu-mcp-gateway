@@ -25,13 +25,23 @@
 # - `VYUU_INBOUND_*` and `VYUU_DB_POOL_*` env vars exposed for tuning
 ################################################################################
 
+name: vyuu-gateway
+
 services:
   gateway:
     build:
       context: ../..
       dockerfile: Dockerfile
-    image: vyuu-gateway:latest
+    # Override with VYUU_IMAGE=<registry>/<image>:<tag> (in ./.env or the shell)
+    # to run a prebuilt image instead of building from this checkout.
+    image: ${VYUU_IMAGE:-vyuu-gateway:latest}
     restart: on-failure
+    # Secrets and deployment identity live in ./gateway.env (0600, git-ignored),
+    # written by deploy/setup/setup-<os>.sh. Values set under `environment:`
+    # below take precedence, so the two sets of keys are kept disjoint.
+    env_file:
+      - path: ./gateway.env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,7 +50,7 @@ services:
       nats:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${VYUU_GATEWAY_PORT:-8000}:8000"
     environment:
       # Connection strings — point at the bundled stateful services.
       VYUU_DATABASE_URL: postgresql+psycopg://vyuu:${POSTGRES_PASSWORD:-changeme}@postgres:5432/vyuu_gateway
@@ -51,6 +61,9 @@ services:
       # deployments override `audit_emitter` in `create_app` or wire
       # the NATS producer at startup.
       VYUU_NATS_URL: nats://nats:4222
+      # Production inbound identity: `Authorization: Bearer vyuu_user_*` keys.
+      # (The `fake` header provider is for the lab and tests only.)
+      VYUU_INBOUND_IDENTITY_PROVIDER: api_key
       # Inbound back-pressure (Tier-1). Tune per tier.
       VYUU_INBOUND_LIMIT_CONCURRENCY: "200"
       VYUU_INBOUND_LIMIT_MAX_REQUESTS: "10000"

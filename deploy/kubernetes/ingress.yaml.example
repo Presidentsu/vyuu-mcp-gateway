@@ -1,0 +1,32 @@
+# Ingress for the gateway. The MCP transport streams (Streamable HTTP / SSE),
+# so the proxy must not buffer responses and must allow long-lived requests.
+# The annotations below are for ingress-nginx; translate for Traefik / ALB.
+# deploy/setup renders this when you give it --ingress-host.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vyuu-gateway
+  namespace: __NAMESPACE__
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+    # Uncomment with cert-manager installed to get a certificate automatically:
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: __INGRESS_CLASS__
+  # Rendered as `tls: [{hosts: ["<host>"], secretName: "<secret>"}]` when a TLS
+  # secret is given; keep the line for a plain-http ingress.
+  __TLS_LINE__
+  rules:
+    - host: __HOST__
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vyuu-gateway
+                port:
+                  name: http

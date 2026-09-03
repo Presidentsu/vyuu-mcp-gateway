@@ -19,6 +19,13 @@ Env vars (all required for the auto-seed to fire):
     VYUU_BOOTSTRAP_ADMIN_EMAIL       = "admin@acme.example"
     VYUU_BOOTSTRAP_ADMIN_PASSWORD    = "Initial password (>= 12 chars)"
     VYUU_BOOTSTRAP_ADMIN_DISPLAY     = "Acme admin"   (optional)
+    VYUU_BOOTSTRAP_TENANT_ID         = "<uuid>"       (optional)
+
+When `VYUU_BOOTSTRAP_TENANT_ID` is set the seeded tenant gets that id,
+so a deployment can pin `VYUU_DEFAULT_TENANT_ID` to the same value
+before the first boot (the setup scripts do this). An unparseable
+value is logged and the seed is skipped rather than creating a tenant
+under a different id than the one the login pages will look for.
 
 When all four are set and no operators yet exist, the bootstrap creates:
 - A new `tenants` row.
@@ -73,9 +80,21 @@ def maybe_bootstrap_admin(session: Session) -> None:
     email = os.environ.get("VYUU_BOOTSTRAP_ADMIN_EMAIL")
     password = os.environ.get("VYUU_BOOTSTRAP_ADMIN_PASSWORD")
     display = os.environ.get("VYUU_BOOTSTRAP_ADMIN_DISPLAY")
+    pinned_tenant_id = os.environ.get("VYUU_BOOTSTRAP_TENANT_ID")
 
     if not (tenant_name and email and password):
         return
+
+    tenant_id: UUID | None = None
+    if pinned_tenant_id:
+        try:
+            tenant_id = UUID(pinned_tenant_id.strip())
+        except ValueError:
+            logger.warning(
+                "bootstrap_tenant_id_invalid",
+                extra={"value": pinned_tenant_id},
+            )
+            return
 
     try:
         validate_password_strength(password)
@@ -126,18 +145,25 @@ def maybe_bootstrap_admin(session: Session) -> None:
     if existing_operator_id is not None:
         return
 
-    tenant_id = uuid4()
+    if tenant_id is None:
+        tenant_id = uuid4()
     operator_id = uuid4()
     user_id = uuid4()
     now = datetime.now(UTC)
     normalized_email = email.strip().lower()
 
-    tenant = Tenant(
-        id=tenant_id,
-        name=tenant_name,
-        tier=TenantTier.SHARED,
-        created_at=now,
-    )
+    # A pinned id may already exist (e.g. a previous boot created the
+    # tenant but the operator insert failed); reuse it instead of
+    # tripping the primary key.
+    tenant = session.get(Tenant, tenant_id)
+    if tenant is None:
+        tenant = Tenant(
+            id=tenant_id,
+            name=tenant_name,
+            tier=TenantTier.SHARED,
+            created_at=now,
+        )
+        session.add(tenant)
     operator = Operator(
         id=operator_id,
         tenant_id=tenant_id,
@@ -166,7 +192,6 @@ def maybe_bootstrap_admin(session: Session) -> None:
         must_change_password=True,
         created_at=now,
     )
-    session.add(tenant)
     session.add(operator)
     session.add(user)
     session.commit()

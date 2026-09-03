@@ -1,0 +1,61 @@
+# One-shot Alembic migration, run from the SAME image that serves traffic
+# (the image ships alembic.ini + migrations/). Apply before every gateway
+# rollout; `kubectl wait --for=condition=complete job/vyuu-gateway-migrate`.
+# Jobs are immutable — delete the previous one before re-applying
+# (deploy/setup does this). Rendered by deploy/setup.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vyuu-gateway-migrate
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: vyuu-gateway
+    app.kubernetes.io/component: migrate
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vyuu-gateway
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      serviceAccountName: vyuu-gateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: migrate
+          image: __IMAGE__
+          imagePullPolicy: __IMAGE_PULL_POLICY__
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: vyuu-gateway-config
+            - secretRef:
+                name: vyuu-gateway-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
