@@ -353,7 +353,7 @@ def test_a_jit_race_on_create_is_absorbed(monkeypatch: pytest.MonkeyPatch) -> No
     from vyuu_gateway.idp import workspace_polling
 
     def raises(db: Any, *, directory: Any, payload: Any) -> Any:
-        raise workspace_polling.scim_users.ScimUserExists
+        raise workspace_polling.scim_users.ScimUserExistsError
 
     monkeypatch.setattr(workspace_polling.scim_users, "create_from_scim", raises)
     monkeypatch.setattr(

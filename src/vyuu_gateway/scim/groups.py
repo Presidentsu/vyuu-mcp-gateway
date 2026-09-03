@@ -32,7 +32,7 @@ from vyuu_gateway.db.models import (
 from vyuu_gateway.scim.schemas import ScimGroup, resolve_member_id
 
 
-class ScimGroupExists(Exception):
+class ScimGroupExistsError(Exception):
     """SCIM POST against a (directory, externalId) that's already
     known — 409 / scimType=uniqueness."""
 
@@ -129,7 +129,7 @@ def create_from_scim(
         db.refresh(group)
     except IntegrityError as exc:
         db.rollback()
-        raise ScimGroupExists from exc
+        raise ScimGroupExistsError from exc
     return group
 
 

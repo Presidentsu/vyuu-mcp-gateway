@@ -116,6 +116,23 @@ select = [
   "W",
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI declares request parameters through call defaults (`x: UUID = Path(...)`).
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Path", "fastapi.Query"]
+
+[tool.ruff.lint.per-file-ignores]
+# SCIM 2.0 (RFC 7643/7644) and SAML HTTP-POST binding names are camelCase on the wire;
+# the Python names mirror them so the schemas serialise and bind without aliases.
+"src/vyuu_gateway/scim/schemas.py" = ["N815"]
+"src/vyuu_gateway/scim/server.py" = ["N803"]
+"src/vyuu_gateway/api/idp_signin.py" = ["N803"]
+# Single-file browser apps embedded as Python strings: line length is governed by the
+# HTML/JS inside, not by Python style.
+"src/vyuu_gateway/api/operator_ui.py" = ["E501"]
+"src/vyuu_gateway/api/portal_ui.py" = ["E501"]
+# `Session = sessionmaker(...)` is SQLAlchemy's documented convention.
+"tests/**" = ["N806"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

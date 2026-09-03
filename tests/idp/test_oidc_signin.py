@@ -130,7 +130,9 @@ def test_oidc_start_400_when_directory_is_saml() -> None:
                 "saml": {
                     "entity_id": "https://acme.example.com/saml",
                     "sso_url": "https://login.microsoftonline.com/contoso/saml2",
-                    "idp_certificate": "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----",
+                    "idp_certificate": (
+                        "-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----"
+                    ),
                 },
             },
         )

@@ -322,7 +322,7 @@ def reconcile(
                     db, directory=directory, payload=remote.to_scim()
                 )
                 report.created += 1
-            except scim_users.ScimUserExists:
+            except scim_users.ScimUserExistsError:
                 # Raced with a JIT sign-in creating the same user. The
                 # sign-in path wins; nothing to reconcile.
                 logger.info(

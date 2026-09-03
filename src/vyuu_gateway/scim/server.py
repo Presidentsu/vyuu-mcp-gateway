@@ -166,7 +166,7 @@ def create_user_endpoint(
         user = scim_users.create_from_scim(
             ctx.db, directory=ctx.directory, payload=payload
         )
-    except scim_users.ScimUserExists:
+    except scim_users.ScimUserExistsError:
         return scim_409("user uniqueness conflict on insert")
 
     return JSONResponse(
@@ -384,7 +384,7 @@ def create_group_endpoint(
             payload=payload,
             operator_id=operator_id,
         )
-    except scim_groups.ScimGroupExists:
+    except scim_groups.ScimGroupExistsError:
         return scim_409("group uniqueness conflict on insert")
     return JSONResponse(
         _group_to_scim(group, request, ctx).model_dump(mode="json"),

@@ -247,7 +247,7 @@ def _to_login_result(response: AuthnResponse) -> SamlLoginResult:
         name_id=name_id,
         email=email,
         display_name=display_name,
-        raw_attributes={k: v for k, v in attrs.items()},
+        raw_attributes=dict(attrs),
     )
 
 

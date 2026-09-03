@@ -36,7 +36,7 @@ from vyuu_gateway.db.models import IdpDirectory, User, UserAuthMethod
 from vyuu_gateway.scim.schemas import ScimUser, primary_email
 
 
-class ScimUserExists(Exception):
+class ScimUserExistsError(Exception):
     """SCIM POST against an externalId we've already provisioned —
     the spec maps this to `409 Conflict / scimType=uniqueness`."""
 
@@ -139,7 +139,7 @@ def create_from_scim(
         db.refresh(user)
     except IntegrityError as exc:
         db.rollback()
-        raise ScimUserExists from exc
+        raise ScimUserExistsError from exc
     return user
 
 

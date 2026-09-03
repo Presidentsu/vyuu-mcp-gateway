@@ -614,7 +614,9 @@ def _admin_audit_section(
         "recent_sample": [
             {
                 "occurred_at": r.occurred_at.isoformat(),
-                "actor_kind": r.actor_kind.value if hasattr(r.actor_kind, "value") else str(r.actor_kind),
+                "actor_kind": (
+                    r.actor_kind.value if hasattr(r.actor_kind, "value") else str(r.actor_kind)
+                ),
                 "actor_display": r.actor_display,
                 "action": r.action,
                 "target_kind": r.target_kind,
