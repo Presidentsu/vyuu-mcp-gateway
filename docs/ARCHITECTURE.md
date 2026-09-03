@@ -88,7 +88,7 @@ sequenceDiagram
 
     AI->>GW: POST /v/{tenant}/{vserver}/mcp  (Bearer vyuu_user_… or EMA token)
     GW->>ID: validate bearer → Principal
-    GW->>DB: SET app.current_tenant_id; resolve vserver, visibility, grants, JIT
+    GW->>DB: SET app.current_tenant_id, then resolve vserver, visibility, grants, JIT
     alt not entitled
         GW->>AUD: access_attempt (deny) → SIEM
         GW-->>AI: 401 / 404
