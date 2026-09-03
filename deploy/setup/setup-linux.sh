@@ -89,6 +89,7 @@ os_local_cluster_hint() {
 os_local_ip() { hostname -I 2>/dev/null | awk '{print $1}'; }
 
 # ---------------------------------------------------------------------------
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 vyuu_setup_main "$@"

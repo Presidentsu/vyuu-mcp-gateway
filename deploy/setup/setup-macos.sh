@@ -93,6 +93,7 @@ os_local_cluster_hint() {
 os_local_ip() { ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true; }
 
 # ---------------------------------------------------------------------------
+# shellcheck source-path=SCRIPTDIR
 # shellcheck source=lib/common.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 vyuu_setup_main "$@"
